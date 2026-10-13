@@ -127,7 +127,7 @@ class AccesoController extends Controller
         $this->authorize('accesos.registrar');
 
         $datos    = $request->validated();
-        $vehiculo = Vehiculo::with('cliente')->findOrFail($datos['vehiculo_id']);
+        $vehiculo = Vehiculo::findOrFail($datos['vehiculo_id']);
         $contrato = $this->contratoActivo($vehiculo);
         $entrada  = $this->crearEntrada($vehiculo, $contrato, $datos);
 
@@ -219,7 +219,7 @@ class AccesoController extends Controller
         $this->authorize('accesos.ver');
 
         return view('accesos.rfid', [
-            'vehiculos'  => Vehiculo::with('cliente', 'entradaAbierta')
+            'vehiculos'  => Vehiculo::with('entradaAbierta')
                 ->where('activo', true)
                 ->orderBy('placas')
                 ->get(),
@@ -370,7 +370,7 @@ class AccesoController extends Controller
 
             return MovimientoAcceso::create([
                 'vehiculo_id'         => $vehiculo->id,
-                'cliente_id'          => $vehiculo->cliente_id ?? $contrato?->cliente_id,
+                'cliente_id'          => $contrato?->cliente_id,
                 'contrato_pension_id' => $contrato?->id,
                 'espacio_id'          => $espacio?->id,
                 'tipo'                => 'ENTRADA',
@@ -573,7 +573,7 @@ class AccesoController extends Controller
     private function formEntrada(array $prefill = []): array
     {
         return [
-            'vehiculos' => Vehiculo::with('cliente', 'tipoVehiculo')
+            'vehiculos' => Vehiculo::with('tipoVehiculo')
                 ->where('activo', true)
                 ->orderBy('placas')
                 ->get(),

@@ -5,7 +5,8 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0">Contratos de pensión</h4>
     @can('contratos.crear')
-        <a href="{{ route('contratos.create') }}" class="btn btn-primary">+ Nuevo contrato</a>
+        <button type="button" class="btn btn-primary"
+                data-bs-toggle="modal" data-bs-target="#modalNuevaPension">+ Nueva pensión</button>
     @endcan
 </div>
 
@@ -123,4 +124,10 @@
 </div>
 
 <div class="mt-3">{{ $contratos->links() }}</div>
+
+@can('contratos.crear')
+    {{-- El listado usa $contrato como variable del bucle: el modal recibe
+         su propia instancia vacía para no heredar los datos del último. --}}
+    @include('contratos._modal_nuevo', ['contrato' => new \App\Models\ContratoPension()])
+@endcan
 @endsection

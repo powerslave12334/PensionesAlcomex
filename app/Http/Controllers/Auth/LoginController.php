@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Providers\RouteServiceProvider;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
 
 class LoginController extends Controller
@@ -21,11 +22,19 @@ class LoginController extends Controller
     use AuthenticatesUsers;
 
     /**
-     * Where to redirect users after login.
-     *
-     * @var string
+     * A dónde va el usuario después de iniciar sesión.
+     * El rol CAJERO aterriza en «Buscar ticket»; el resto, al dashboard.
      */
-    protected $redirectTo = '/home';
+    protected function redirectPath(): string
+    {
+        $usuario = auth()->user();
+
+        if ($usuario && $usuario->hasRole('CAJERO')) {
+            return route('pagos.tickets');
+        }
+
+        return RouteServiceProvider::HOME;
+    }
 
     /**
      * Create a new controller instance.

@@ -26,8 +26,7 @@
                             <option value="">— Selecciona un vehículo —</option>
                             @foreach ($vehiculos as $v)
                                 <option value="{{ $v->id }}" @selected((string) old('vehiculo_id', $prefill['vehiculo_id']) === (string) $v->id)>
-                                    {{ $v->placas }} · {{ $v->marca }} {{ $v->modelo }} ·
-                                    {{ $v->cliente?->nombre_completo }}
+                                    {{ $v->placas }} · {{ $v->marca }} {{ $v->modelo }}
                                 </option>
                             @endforeach
                         </select>

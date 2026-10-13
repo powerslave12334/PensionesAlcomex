@@ -33,7 +33,7 @@
             <thead class="table-light">
             <tr>
                 <th>Foto</th><th>Placas</th><th>Vehículo</th><th>Tipo</th>
-                <th>Propietario</th><th>VIN</th><th class="text-center">Estado</th><th></th>
+                <th>VIN</th><th class="text-center">Estado</th><th></th>
             </tr>
             </thead>
             <tbody>
@@ -50,7 +50,6 @@
                     <td class="fw-bold">{{ $v->placas }}</td>
                     <td>{{ trim(($v->marca ?? '').' '.($v->modelo ?? '')) ?: '—' }} @if($v->anio)<small class="text-muted">({{ $v->anio }})</small>@endif</td>
                     <td>{{ $v->tipoVehiculo?->nombre ?? '—' }}</td>
-                    <td>{{ $v->cliente?->nombre_completo ?? '—' }}</td>
                     <td><small>{{ $v->vin ?: '—' }}</small></td>
                     <td class="text-center">
                         <span class="badge {{ $v->activo ? 'bg-success' : 'bg-secondary' }}">

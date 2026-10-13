@@ -8,7 +8,9 @@ use App\Models\Cliente;
 use App\Models\ContratoPension;
 use App\Models\Espacio;
 use App\Models\Tarifa;
+use App\Models\TipoVehiculo;
 use App\Models\Vehiculo;
+use App\Support\Barcode;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,9 +41,12 @@ class ContratoPensionController extends Controller
 
         $totalPorVencer = ContratoPension::porVencer()->count();
 
-        return view('contratos.index', compact(
+        // Combos para el modal de «Nueva pensión» (la vista pasa su propia
+        // instancia vacía de $contrato: aquí la variable $contrato es el
+        // elemento del listado).
+        return view('contratos.index', array_merge($this->combos(), compact(
             'contratos', 'q', 'estado', 'filtroPorVencer', 'totalPorVencer'
-        ));
+        )));
     }
 
     public function create()
@@ -60,23 +65,65 @@ class ContratoPensionController extends Controller
         $espacioId  = $datos['espacio_id'] ?? null;
         unset($datos['espacio_id']);
 
-        $contrato = $this->crearContrato($datos);
+        $contrato = DB::transaction(function () use ($datos) {
+            $cliente  = $this->resolverCliente($datos);
+            $vehiculo = $this->resolverVehiculo($datos);
+
+            return $this->crearContrato($this->datosDelContrato($datos, $cliente, $vehiculo));
+        });
+
+        // NUEVO: Al crear el contrato, si está PENDIENTE, pasa a ACTIVA automáticamente.
+        if ($contrato->estado === 'PENDIENTE') {
+            $contrato->update(['estado' => 'ACTIVA']);
+        }
 
         $error = $espacioId
             ? $this->asignarCajon($contrato, (int) $espacioId, 'Asignación inicial')
             : null;
 
         if ($error) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok'      => true,
+                    'message' => "Contrato {$contrato->numero_contrato} creado, pero el cajón no se asignó: {$error}",
+                ]);
+            }
+
             return redirect()->route('contratos.show', $contrato)->with(
                 'error',
                 "Contrato {$contrato->numero_contrato} creado, pero el cajón no se asignó: {$error}"
             );
         }
 
-        return redirect()->route('contratos.show', $contrato)->with(
-            'success',
-            "Contrato {$contrato->numero_contrato} creado correctamente."
-        );
+        if ($request->expectsJson()) {
+            // El modal de «Nueva pensión» imprime el ticket y sigue en el panel.
+            return response()->json([
+                'ok'         => true,
+                'message'    => "Contrato {$contrato->numero_contrato} creado correctamente.",
+                'ticket_url' => route('contratos.ticket', ['contrato' => $contrato, 'auto' => 1]),
+                'redirect'   => route('contratos.show', $contrato),
+            ]);
+        }
+
+        return redirect()->route('contratos.show', $contrato)
+            ->with('success', "Contrato {$contrato->numero_contrato} creado correctamente.")
+            ->with('ticket_nuevo', true); // el expediente abre el ticket para imprimir
+    }
+
+    /** Ticket térmico de 80 mm con el código de barras del folio (para cobro). */
+    public function ticket(ContratoPension $contrato)
+    {
+        $this->authorize('contratos.ver');
+
+        $contrato->load([
+            'cliente', 'vehiculo.tipoVehiculo', 'tarifa',
+            'asignacionVigiente.espacio.zona',
+        ]);
+
+        return view('contratos.ticket', [
+            'contrato'   => $contrato,
+            'barcodeSvg' => Barcode::code128($contrato->numero_contrato),
+        ]);
     }
 
     public function edit(ContratoPension $contrato)
@@ -107,7 +154,12 @@ class ContratoPensionController extends Controller
         $datos = $request->validated();
         unset($datos['espacio_id']); // la asignación se gestiona desde el expediente
 
-        $contrato->update($datos);
+        DB::transaction(function () use ($contrato, $datos) {
+            $cliente  = $this->resolverCliente($datos);
+            $vehiculo = $this->resolverVehiculo($datos);
+
+            $contrato->update($this->datosDelContrato($datos, $cliente, $vehiculo));
+        });
 
         return redirect()->route('contratos.show', $contrato)->with(
             'success',
@@ -282,13 +334,101 @@ class ContratoPensionController extends Controller
     private function combos(): array
     {
         return [
-            'clientes'  => Cliente::where('activo', true)->orderBy('nombre')->get(),
-            'vehiculos' => Vehiculo::where('activo', true)->with('tipoVehiculo')->orderBy('placas')->get(),
+            'tiposVehiculo' => TipoVehiculo::where('activo', true)->orderBy('nombre')->get(),
             'tarifas'   => Tarifa::vigente()->with('tipoVehiculo')
                             ->orderBy('tipo_tarifa')->orderBy('nombre')->get(),
             'espacios'  => Espacio::where('activo', true)->where('estado', 'DISPONIBLE')
                             ->with(['zona', 'tipoVehiculo'])->orderBy('codigo')->get(),
         ];
+    }
+
+    /**
+     * Tres campos planos del cliente (nombre, apellidos y teléfono): busca
+     * al cliente por nombre + apellidos; si existe se enlaza y solo se
+     * actualiza el teléfono, y si no existe, se crea. Sin buscador ni
+     * alta rápida en el formulario.
+     */
+    private function resolverCliente(array $datos): Cliente
+    {
+        $nombre        = trim($datos['cliente_nombre']);
+        $apellidos     = trim($datos['cliente_apellido']);
+        $apellidosNorm = $this->normalizarApellidos($apellidos);
+        $telefono      = trim($datos['cliente_telefono'] ?? '');
+
+        $cliente = Cliente::where('nombre', $nombre)
+            ->get()
+            ->first(fn (Cliente $c) => $this->normalizarApellidos(
+                ($c->apellido_paterno ?? '') . ' ' . ($c->apellido_materno ?? '')
+            ) === $apellidosNorm);
+
+        if ($cliente) {
+            if ($telefono !== '' && $telefono !== (string) $cliente->telefono) {
+                $cliente->update(['telefono' => $telefono]);
+            }
+
+            return $cliente;
+        }
+
+        return Cliente::create([
+            'nombre'           => $nombre,
+            'apellido_paterno' => $apellidos !== '' ? $apellidos : '—',
+            'telefono'         => $telefono !== '' ? $telefono : null,
+        ]);
+    }
+
+    /** Minúsculas, espacios colapsados y «—» (vacío) fuera, para comparar. */
+    private function normalizarApellidos(string $texto): string
+    {
+        $texto = str_replace('—', ' ', $texto);
+
+        return preg_replace('/\s+/', ' ', mb_strtolower(trim($texto)));
+    }
+
+    /**
+     * Unidad capturada en línea: si las placas ya existen se reutiliza el
+     * vehículo; si no, se crea. (La relación cliente–vehículo aún no existe:
+     * el cliente queda ligado por el contrato.)
+     */
+    private function resolverVehiculo(array $datos): Vehiculo
+    {
+        $placas   = strtoupper(trim($datos['placas']));
+        $vehiculo = Vehiculo::where('placas', $placas)->first();
+
+        $atributos = [
+            'placas'           => $placas,
+            'tipo_vehiculo_id' => (int) $datos['tipo_vehiculo_id'],
+            'marca'            => $datos['marca'],
+            'modelo'           => $datos['modelo'],
+            'color'            => $datos['color'],
+        ];
+
+        if (! $vehiculo) {
+            return Vehiculo::create($atributos);
+        }
+
+        $vehiculo->update($atributos);
+
+        return $vehiculo;
+    }
+
+    /**
+     * Deja únicamente los campos de la tabla contratos_pension: quita los
+     * auxiliares de alta rápida y de captura de la unidad, enlaza cliente y
+     * vehículo, y aplica la fecha de entrada automática.
+     */
+    private function datosDelContrato(array $datos, Cliente $cliente, Vehiculo $vehiculo): array
+    {
+        unset(
+            $datos['cliente_nombre'], $datos['cliente_apellido'],
+            $datos['cliente_telefono'], $datos['tipo_vehiculo_id'],
+            $datos['placas'], $datos['marca'], $datos['modelo'], $datos['color'],
+        );
+
+        $datos['cliente_id']    = $cliente->id;
+        $datos['vehiculo_id']   = $vehiculo->id;
+        $datos['fecha_entrada'] = $datos['fecha_entrada'] ?? now();
+
+        return $datos;
     }
 
     /**

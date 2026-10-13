@@ -17,7 +17,6 @@ class VehiculoRequest extends FormRequest
         $unico = fn (string $campo) => $vehiculoId ? "unique:vehiculos,{$campo},{$vehiculoId}" : "unique:vehiculos,{$campo}";
 
         return [
-            'cliente_id'       => ['required', 'exists:clientes,id'],
             'tipo_vehiculo_id' => ['required', 'exists:tipos_vehiculo,id'],
             'placas'           => ['required', 'string', 'max:20', $unico('placas')],
             'marca'            => ['nullable', 'string', 'max:80'],
@@ -37,7 +36,6 @@ class VehiculoRequest extends FormRequest
         return [
             'placas.required'  => 'Las placas son obligatorias.',
             'placas.unique'    => 'Ya existe un vehículo con esas placas.',
-            'cliente_id.exists' => 'El cliente seleccionado no existe.',
             'tipo_vehiculo_id.exists' => 'El tipo de vehículo no existe.',
             'foto.image'       => 'La fotografía debe ser un archivo de imagen (jpg, png o webp).',
             'foto.max'         => 'La fotografía no puede superar 2 MB.',

@@ -5,11 +5,11 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0">Pagos y recibos</h4>
     <div class="d-flex gap-2">
+        @can('pagos.ver')
+            <a href="{{ route('pagos.tickets') }}" class="btn btn-outline-primary">Buscar ticket</a>
+        @endcan
         @can('pagos.corte')
             <a href="{{ route('pagos.corte') }}" class="btn btn-outline-secondary">Corte de caja</a>
-        @endcan
-        @can('pagos.crear')
-            <a href="{{ route('pagos.create') }}" class="btn btn-primary">+ Nuevo cobro</a>
         @endcan
     </div>
 </div>

@@ -83,6 +83,8 @@ class RolPermisoSeeder extends Seeder
 
         Role::findByName('CAJERO')->syncPermissions([
             'espacios.ver', 'contratos.ver',
+            // Ajuste: el cajero da de alta pensiones, las edita y las activa
+            'contratos.crear', 'contratos.editar', 'contratos.cambiar_estado',
             // Sprint 4 — cobra y hace corte (US-0401, US-0405)
             'pagos.ver', 'pagos.crear', 'pagos.corte',
             // Sprint 5 — liquida el cobro de la salida de visitantes (US-0502)

@@ -1821,6 +1821,18 @@ C:\php\php.exe artisan serve --port=8002
 7. **Checklist US-0407** — el borrador decía «Cajero sin `pagos.crear` → 403»;
    el CAJERO sí tiene `pagos.crear`, el 403 se verificó con SUPERVISOR.
 8. **Puerto** — 8000 ocupado por otra app → servidor en **8002**.
+9. **Subtotal por periodo en meses (10/10/2026)** — el cálculo original usaba
+   «meses calendario tocados» (11/10–10/11 daba 2). Se cambió a **meses completos**
+   (convención de `periodoSugerido`: un periodo de N meses va de `inicio` a
+   `inicio + N meses − 1 día`). Implementado en `Pago::calcularMeses()` (loop con
+   tope 1200) + accessor `meses_cobrados`; el JS del formulario replica la misma
+   regla y muestra la ayuda «N meses × $mensualidad = subtotal»; el recibo muestra
+   «N meses · $X por mes». Verificado: 01/10–31/10 = 1; 11/10–10/04/2027 = 6 →
+   $9,600.00 (contrato MENSUAL $1,600); regresión 1 mes $1,500.00 OK. Nota: 11/10–
+   11/04/2027 = 6 (no 7): el día 11/04 no completa el mes 7.
+   ⚠️ `@php($var = …)` inline en Blade se compila mal con Livewire en este
+   proyecto (`<?php($var = …)` sin `?>` → 500 «unexpected token endif»); usar el
+   accessor directamente en la vista.
 
 ### Estado de los datos al terminar
 
@@ -1834,6 +1846,9 @@ C:\php\php.exe artisan serve --port=8002
   tarifas = 10, cajones sin cambios (A-01 ocupado por el contrato).
 - `laravel.log`: sin errores nuevos tras las tres correcciones (los únicos
   `local.ERROR` de hoy son los dos bugs ya corregidos y un typo en un `tinker`).
+- 10/10/2026 (tras la desviación 9): se repoblaron datos demo — `pagos` = 2:
+  `REC-2026-0001` PAGADO $9,600.00 (6 meses, Efectivo, PEN-2026-0002) y
+  `REC-2026-0002` PAGADO $1,500.00 (1 mes, Efectivo, PEN-2026-0001).
 
 ### Estado final
 

@@ -21,7 +21,13 @@ class RedirectIfAuthenticated
 
         foreach ($guards as $guard) {
             if (Auth::guard($guard)->check()) {
-                return redirect(RouteServiceProvider::HOME);
+                $usuario = Auth::guard($guard)->user();
+
+                return redirect(
+                    $usuario && $usuario->hasRole('CAJERO')
+                        ? route('pagos.tickets')
+                        : RouteServiceProvider::HOME
+                );
             }
         }
 

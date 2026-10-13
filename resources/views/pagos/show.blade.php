@@ -75,9 +75,17 @@
                     </thead>
                     <tbody>
                     <tr>
-                        <td>Pensión {{ $pago->contrato?->periodicidad
-                            ? \App\Models\ContratoPension::PERIODICIDAD_LABELS[$pago->contrato->periodicidad]
-                            : 'vehicular' }}</td>
+                        <td>
+                            Pensión {{ $pago->contrato?->periodicidad
+                                ? \App\Models\ContratoPension::PERIODICIDAD_LABELS[$pago->contrato->periodicidad]
+                                : 'vehicular' }}
+                            @if ($pago->meses_cobrados)
+                                <div class="text-muted small">
+                                    {{ $pago->meses_cobrados }} {{ $pago->meses_cobrados === 1 ? 'mes' : 'meses' }} ·
+                                    ${{ number_format((float) $pago->subtotal / $pago->meses_cobrados, 2) }} por mes
+                                </div>
+                            @endif
+                        </td>
                         <td class="text-end">${{ number_format((float) $pago->subtotal, 2) }}</td>
                     </tr>
                     <tr>

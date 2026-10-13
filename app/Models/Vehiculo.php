@@ -16,7 +16,7 @@ class Vehiculo extends Model
     protected $table = 'vehiculos';
 
     protected $fillable = [
-        'cliente_id', 'placas', 'uid_rfid', 'marca', 'modelo', 'anio', 'color',
+        'placas', 'uid_rfid', 'marca', 'modelo', 'anio', 'color',
         'tipo_vehiculo_id', 'vin', 'numero_motor', 'foto_url',
         'observaciones', 'activo',
     ];
@@ -25,11 +25,6 @@ class Vehiculo extends Model
         'anio' => 'integer',
         'activo' => 'boolean',
     ];
-
-    public function cliente(): BelongsTo
-    {
-        return $this->belongsTo(Cliente::class);
-    }
 
     public function tipoVehiculo(): BelongsTo
     {

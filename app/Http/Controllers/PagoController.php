@@ -6,6 +6,8 @@ use App\Http\Requests\PagoRequest;
 use App\Models\ContratoPension;
 use App\Models\MetodoPago;
 use App\Models\Pago;
+use App\Models\Tarifa;
+use App\Models\TipoVehiculo;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -92,10 +94,57 @@ class PagoController extends Controller
             }
 
             [$prefill['periodo_inicio'], $prefill['periodo_fin']] = $this->periodoSugerido($contrato);
-            $prefill['subtotal'] = number_format((float) $contrato->precio, 2, '.', '');
+
+            // Subtotal = mensualidad × meses naturales del periodo sugerido.
+            $mensualidad = (float) $contrato->precio
+                / (ContratoPension::MESES[$contrato->periodicidad] ?? 1);
+            $meses = Pago::calcularMeses(
+                Carbon::parse($prefill['periodo_inicio']),
+                Carbon::parse($prefill['periodo_fin'])
+            );
+            $prefill['subtotal'] = number_format(round($mensualidad * $meses, 2), 2, '.', '');
         }
 
         return view('pagos.create', array_merge($this->combos(), compact('contrato', 'prefill')));
+    }
+
+    /** Formulario de cobro ya llenado para un contrato (modal vía AJAX). */
+    public function createModal(Request $request)
+    {
+        $this->authorize('pagos.crear');
+
+        $contrato = ContratoPension::with(['cliente', 'vehiculo'])
+            ->find((int) $request->query('contrato_id'));
+
+        if (! $contrato) {
+            return response()->json(
+                ['error' => 'Ese contrato no existe.'],
+                404
+            );
+        }
+
+        if (in_array($contrato->estado, ['CANCELADA', 'FINALIZADA'], true)) {
+            return response()->json(
+                ['error' => "El contrato {$contrato->numero_contrato} está cerrado: no se le puede cobrar."],
+                422
+            );
+        }
+
+        // El periodo lo define el servidor: desde el inicio de la pensión
+        // hasta el día del pago (hoy).
+        $inicio     = $contrato->fecha_inicio;
+        $mensualidad = (float) $contrato->precio
+            / (ContratoPension::MESES[$contrato->periodicidad] ?? 1);
+        $meses      = Pago::calcularMeses($inicio, now());
+        $prefill    = [
+            'periodo_inicio' => $inicio->toDateString(),
+            'subtotal'       => number_format(round($mensualidad * $meses, 2), 2, '.', ''),
+        ];
+
+        return view('pagos._modal_cobro', array_merge(
+            $this->combos(),
+            compact('contrato', 'prefill')
+        ));
     }
 
     /** US-0401 + US-0402: guarda el cobro con folio único y totales del servidor. */
@@ -110,6 +159,8 @@ class PagoController extends Controller
         $datos['cliente_id']  = $contrato->cliente_id;
         $datos['usuario_id']  = Auth::id();
         $datos['fecha_pago']  = Carbon::parse($datos['fecha_pago']);
+        $datos['periodo_fin'] = $datos['fecha_pago']; // el periodo cierra el día del pago
+        $datos['estado']      = 'PAGADO'; // el cobro del modal siempre es «Pagado»
         $datos['descuento']   = (float) ($datos['descuento'] ?? 0);
         $datos['impuesto']    = (float) ($datos['impuesto'] ?? 0);
         $datos['subtotal']    = (float) $datos['subtotal'];
@@ -123,11 +174,82 @@ class PagoController extends Controller
 
         $pago = $this->crearPago($datos);
 
+        // Al cobrar, la pensión pasa de PENDIENTE a ACTIVA (y el cajón a OCUPADO).
+        if ($contrato->estado === 'PENDIENTE') {
+            $contrato->update(['estado' => 'ACTIVA']);
+            $this->sincronizarEspacio($contrato);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok'       => true,
+                'message'  => 'Recibo ' . $pago->numero_recibo . ' registrado por $'
+                    . number_format((float) $pago->total, 2) . '.',
+                'redirect' => route('pagos.show', $pago),
+            ]);
+        }
+
         return redirect()->route('pagos.show', $pago)->with(
             'success',
             'Recibo ' . $pago->numero_recibo . ' registrado por $'
                 . number_format((float) $pago->total, 2) . '.'
         );
+    }
+
+    /**
+     * Búsqueda del ticket a cobrar por folio o por placa.
+     * Por defecto solo muestra contratos «no cobrados» (sin pagos en estado
+     * PAGADO) y que no estén cancelados/finalizados. Al escanear el código de
+     * barras del ticket, el folio llega a este buscador.
+     */
+    public function tickets(Request $request)
+    {
+        $this->authorize('pagos.ver');
+
+        $request->validate([
+            'q'     => ['nullable', 'string', 'max:100'],
+            'todas' => ['nullable', 'boolean'],
+        ], [], ['q' => 'búsqueda', 'todas' => 'incluir cobrados']);
+
+        $q     = trim($request->string('q')->toString());
+        $todas = $request->boolean('todas');
+
+        $resultados = collect();
+        $exacto     = null;
+
+        if ($q !== '') {
+            $consulta = ContratoPension::query()
+                ->whereNotIn('estado', ['CANCELADA', 'FINALIZADA'])
+                ->where(function ($w) use ($q) {
+                    $w->where('numero_contrato', 'like', "%{$q}%")
+                        ->orWhereHas('vehiculo', fn ($v) => $v->where('placas', 'like', "%{$q}%"));
+                });
+
+            if (! $todas) {
+                // «no cobrada»: sin ningún pago en estado PAGADO.
+                $consulta->whereDoesntHave('pagos', fn ($p) => $p->where('estado', 'PAGADO'));
+            }
+
+            $resultados = $consulta
+                ->with(['cliente', 'vehiculo.tipoVehiculo', 'pagos'])
+                ->orderByDesc('fecha_inicio')
+                ->limit(25)
+                ->get();
+
+            // Coincidencia exacta por folio o placa → cobro directo.
+            $texto = mb_strtoupper($q);
+            $exacto = $resultados->first(fn ($c) => mb_strtoupper($c->numero_contrato) === $texto)
+                ?? $resultados->first(fn ($c) => mb_strtoupper((string) $c->vehiculo?->placas) === $texto);
+        }
+
+        // Combos para el modal de «Nueva pensión» (mismos criterios del
+        // formulario: solo tipos activos y tarifas vigentes).
+        return view('pagos.tickets', compact('q', 'todas', 'resultados', 'exacto') + [
+            'tiposVehiculo' => TipoVehiculo::where('activo', true)->orderBy('nombre')->get(),
+            'tarifas'       => Tarifa::vigente()->with('tipoVehiculo')
+                            ->orderBy('tipo_tarifa')->orderBy('nombre')->get(),
+            'contrato'      => new ContratoPension(),
+        ]);
     }
 
     /** US-0403: recibo imprimible («Guardar como PDF» desde el diálogo de impresión). */
@@ -300,5 +422,29 @@ class PagoController extends Controller
         $secuencia = $ultima ? ((int) substr($ultima, -4)) + 1 : 1;
 
         return sprintf('REC-%s-%04d', now()->format('Y'), $secuencia);
+    }
+
+    /**
+     * Sincroniza el estado del cajón con el contrato
+     * (mismo match que ContratoPensionController::sincronizarEspacio).
+     */
+    private function sincronizarEspacio(ContratoPension $contrato): void
+    {
+        $contrato->loadMissing('asignacionVigiente.espacio');
+        $espacio = $contrato->asignacionVigiente?->espacio;
+
+        if (! $espacio) {
+            return;
+        }
+
+        $estado = match ($contrato->estado) {
+            'ACTIVA'                               => 'OCUPADO',
+            'PENDIENTE', 'SUSPENDIDA', 'VENCIDA'   => 'RESERVADO',
+            default                                => 'DISPONIBLE',
+        };
+
+        if ($espacio->estado !== $estado) {
+            $espacio->update(['estado' => $estado]);
+        }
     }
 }

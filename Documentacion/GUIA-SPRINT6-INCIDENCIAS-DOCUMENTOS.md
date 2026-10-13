@@ -36,14 +36,35 @@ nuevas.**
 
 ### Estado actual (tras Sprint 5)
 
-- Rutas **92**, permisos **40** (`accesos.*` incluidos), usuarios **5**
+- Rutas **94**, permisos **40** (`accesos.*` incluidos), usuarios **5**
   (`admin`, `cajero`, `supervisor`, `seguridad`, `recepcion`), roles 5.
+- **Ajuste 10/10/2026:** `CAJERO` recibió `contratos.crear`,
+  `contratos.editar` y `contratos.cambiar_estado` (da de alta, corrige y
+  activa pensiones). No cambia el total de permisos (sigue en **40**): solo
+  cambia el reparto (CAJERO 7 → 10). Ver desviación registrada en
+  `GUIA-SPRINT3-TARIFAS-Y-PENSIONES.md`.
+- **Ajuste 12/10/2026:** rediseño del alta de pensiones (ver desviación en
+  `GUIA-SPRINT3`): nuevas rutas `GET clientes/buscar` y `GET vehiculos/buscar`
+  (autocompletado por placas) → base **94 rutas**; los objetivos de esta guía
+  quedan **94 → 114** (no 92 → 112). Añade 1 migración aditiva ya aplicada
+  (`2026_10_10_100000_add_datos_nueva_pension...`); los permisos siguen en
+  **40**.
 - Catálogos sembrados: 4 zonas, 5 tipos de vehículo, 10 tarifas, 5 métodos de
   pago, 7 dispositivos, 2 puertas, **7 tipos de incidencia = 0** (aún no sembrados).
-- **La BD quedó sin datos operativos** (limpieza del equipo): `clientes`,
-  `vehiculos`, `espacios`, `contratos_pension`, `pagos` y `movimientos_acceso`
-  = **0**. La verificación de este sprint empieza con un **paso 0** que crea un
-  cliente y dos vehículos desde las pantallas que ya existen.
+- **La BD quedó casi sin datos operativos** (limpieza del equipo): `espacios`,
+  `pagos` y `movimientos_acceso` = **0**. El 10/10/2026 se repobló lo mínimo
+  para probar el ajuste del CAJERO: 1 cliente (`Juan Perez Lopez`), 1 vehículo
+  (`ABC1234`) y 1 contrato (`PEN-2026-0001`, id 5, **ACTIVA** — alta y
+  activación hechas por el cajero). El paso 7.0 de esta guía
+  solo falta crear el segundo vehículo (`XYZ9999`).
+- **12/10/2026 (tras el rediseño del alta):** datos actuales = 2 clientes
+  (`Juan Perez Lopez`, `Maria Lopez`), 2 vehículos (`ABC1234`, `XYZ9876`),
+  5 contratos (`PEN-2026-0001` ACTIVA, `PEN-2026-0002` MENSUAL precio 1600,
+  `PEN-2026-0003`, `PEN-2026-0004` y `PEN-2026-0005` con
+  empresa/fecha_entrada/documentación), 3 pagos (`REC-2026-0001` 6 meses
+  $9,600, `REC-2026-0002` y `REC-2026-0003` de 1 mes $1,500 c/u). Cajones
+  siguen en 0. Para el paso 7.0 ya existe un segundo vehículo distinto de
+  `ABC1234` (`XYZ9876`); si el paso pide `XYZ9999` específicamente, crearlo.
 - El enlace del menú «Incidencias» está como
   `<li class="nav-item"><span class="nav-link disabled text-white-50">Incidencias</span></li>`
   (`layouts/app.blade.php` línea 100); «Accesos» ya quedó activo.
@@ -69,7 +90,7 @@ nuevas.**
 | Vistas | `resources/views/incidencias/{index,create,edit,show,_form}.blade.php` |
 | Vistas | `resources/views/tipos_incidencia/{index,create,edit,_form}.blade.php` |
 | Vistas | `resources/views/documentos/{index,expediente}.blade.php` |
-| Rutas/menú | `routes/web.php` (20 rutas → **112**), `layouts/app.blade.php` (grupo Incidencias), `HomeController` + `home.blade.php` (alerta de documentos) |
+| Rutas/menú | `routes/web.php` (20 rutas → **114**), `layouts/app.blade.php` (grupo Incidencias), `HomeController` + `home.blade.php` (alerta de documentos) |
 | Enlaces | `vehiculos/index.blade.php` (botón «Documentos»), `accesos/show.blade.php` (incidencias del vehículo) |
 
 ---
@@ -138,7 +159,7 @@ nuevas.**
     - SUPERVISOR → `incidencias.ver + editar + cambiar_estado`, `documentos.ver` (4).
     - RECEPCION → `incidencias.ver`, `documentos.ver + crear` (3).
     - CAJERO → `documentos.ver` (1).
-14. **20 rutas nuevas (92 → 112)** y, otra vez, **las estáticas antes del
+14. **20 rutas nuevas (94 → 114)** y, otra vez, **las estáticas antes del
     `resource`** (lección de Sprint 4/5).
 15. **Sin dependencias nuevas:** no se instala npm ni se toca
     `resources/js/app.js`; el solo `@push('scripts')` de las vistas basta
@@ -2233,11 +2254,11 @@ del bloque del Sprint 5:
 ```
 
 Conteo: `incidencias` 3 + 6 (`resource` sin `destroy`) = 9 · `tipos-incidencia`
-6 · `documentos` 1 · expediente 4 → **20 rutas (92 → 112)**.
+6 · `documentos` 1 · expediente 4 → **20 rutas (94 → 114)**.
 
 ```powershell
 C:\php\php.exe artisan route:list --json | ConvertFrom-Json | Measure-Object | Select-Object Count
-# 112
+# 114
 ```
 
 ### 6.2 `resources/views/layouts/app.blade.php` - menú
@@ -2428,9 +2449,12 @@ Get-ChildItem app\Http\Controllers\IncidenciaController.php,
 
 Servidor: `C:\php\php.exe artisan serve --port=8002` → `http://127.0.0.1:8002`.
 
-### 7.0 Datos mínimos (la BD quedó sin datos operativos)
+### 7.0 Datos mínimos (la BD casi sin datos operativos)
 
 Con `admin@pension.mx` / `password`:
+
+> Los pasos 1 y 2 ya se ejecutaron el 10/10/2026 (cliente «Juan Perez Lopez»
+> y vehículo `ABC1234`); solo falta el vehículo 3.
 
 1. **Clientes → + Nuevo cliente:** nombre «Juan Perez Lopez» (teléfono
    `5551234567`, correo `juan@demo.test`) → guardar.
@@ -2624,7 +2648,7 @@ Lo que deja preparado este sprint:
 | 1 | `C:\php\php.exe artisan migrate` | ⬜ | Debe decir «Nothing to migrate» (27 migraciones, 0 nuevas). |
 | 2 | `C:\php\php.exe artisan db:seed --class=TipoIncidenciaSeeder` | ⬜ | 7 tipos de incidencia. |
 | 3 | `C:\php\php.exe artisan db:seed --class=RolPermisoSeeder` | ⬜ | 49 permisos (40 previos intactos). |
-| 4 | `C:\php\php.exe artisan route:list --json` | ⬜ | 112 rutas (20 de Módulo 10). |
+| 4 | `C:\php\php.exe artisan route:list --json` | ⬜ | 114 rutas (20 de Módulo 10). |
 | 5 | `Get-ChildItem … \| ForEach { C:\php\php.exe -l $_ }` | ⬜ | 17/17 OK. |
 | 6 | `npm run build` | ⬜ | Sin cambios de JS: solo confirma que compila. |
 | 7 | Servidor `C:\php\php.exe artisan serve --port=8002` | ⬜ | `http://127.0.0.1:8002`. |
@@ -2683,7 +2707,7 @@ Lo que deja preparado este sprint:
 | Dato | Cantidad esperada | Real |
 |---|---|---|
 | `permissions` | 49 | |
-| `rutas` | 112 | |
+| `rutas` | 114 | |
 | `tipos_incidencia` | 7 | |
 | `incidencias` | ≥ 1 (las de las pruebas) | |
 | `incidencia_archivos` | ≥ 1 | |
@@ -2695,7 +2719,7 @@ Lo que deja preparado este sprint:
 
 - [ ] Los 17 archivos pasan `php -l`.
 - [ ] `npm run build` sin errores.
-- [ ] 112 rutas y 49 permisos.
+- [ ] 114 rutas y 49 permisos.
 - [ ] Checklist §7.1 completo (sin casillas en `⬜`).
 - [ ] Matriz §7.2 coincide con la tabla esperada.
 - [ ] Sin errores nuevos de la aplicación en `storage/logs/laravel.log`.

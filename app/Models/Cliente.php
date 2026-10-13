@@ -24,9 +24,9 @@ class Cliente extends Model
         'activo' => 'boolean',
     ];
 
-    public function vehiculos(): HasMany
+    public function contratos(): HasMany
     {
-        return $this->hasMany(Vehiculo::class);
+        return $this->hasMany(ContratoPension::class);
     }
 
     public function pagos(): HasMany
@@ -37,6 +37,17 @@ class Cliente extends Model
     public function getNombreCompletoAttribute(): string
     {
         return trim("{$this->nombre} {$this->apellido_paterno} {$this->apellido_materno}");
+    }
+
+    /** Apellidos listos para el formulario: paterno + materno sin «—». */
+    public function getApellidosCompletosAttribute(): string
+    {
+        $partes = array_filter([
+            trim((string) $this->apellido_paterno),
+            trim((string) $this->apellido_materno),
+        ], fn (string $p) => $p !== '' && $p !== '—');
+
+        return implode(' ', $partes);
     }
 
     public function scopeBuscar(Builder $query, ?string $termino): Builder

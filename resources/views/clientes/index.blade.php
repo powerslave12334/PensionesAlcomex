@@ -26,7 +26,7 @@
             <thead class="table-light">
             <tr>
                 <th>#</th><th>Nombre completo</th><th>Teléfono</th><th>Correo</th>
-                <th>RFC</th><th class="text-center">Vehículos</th><th class="text-center">Estado</th><th></th>
+                <th>RFC</th><th class="text-center">Estado</th><th></th>
             </tr>
             </thead>
             <tbody>
@@ -37,7 +37,6 @@
                     <td>{{ $cliente->telefono ?: '—' }}</td>
                     <td>{{ $cliente->email ?: '—' }}</td>
                     <td>{{ $cliente->rfc ?: '—' }}</td>
-                    <td class="text-center">{{ $cliente->vehiculos_count }}</td>
                     <td class="text-center">
                         <span class="badge {{ $cliente->activo ? 'bg-success' : 'bg-secondary' }}">
                             {{ $cliente->activo ? 'Activo' : 'Inactivo' }}

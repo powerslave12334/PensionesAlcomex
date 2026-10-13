@@ -77,7 +77,7 @@
                     {{ $e->asignacionVigiente->contrato->vehiculo->placas }}
                 </small>
                 <small class="d-block text-muted">
-                    {{ $e->asignacionVigiente->contrato->vehiculo->cliente?->nombre_completo }}
+                    {{ $e->asignacionVigiente->contrato->cliente?->nombre_completo }}
                 </small>
             @else
                 <small class="d-block text-muted">Sin asignación vigente</small>

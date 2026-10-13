@@ -18,3 +18,4 @@ yarn-error.log
 /.idea
 /.vscode
 /.playwright-mcp
+/composer_install.php

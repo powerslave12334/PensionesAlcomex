@@ -25,6 +25,7 @@
         @can('contratos.editar')
             <a href="{{ route('contratos.edit', $contrato) }}" class="btn btn-outline-primary">Editar</a>
         @endcan
+        <a href="{{ route('contratos.ticket', ['contrato' => $contrato, 'auto' => 1]) }}" target="_blank" class="btn btn-outline-dark">Imprimir ticket</a>
         <a href="{{ route('contratos.index') }}" class="btn btn-outline-secondary">Volver</a>
     </div>
 </div>
@@ -41,14 +42,28 @@
                     <dd class="col-7 fw-bold">${{ number_format((float) $contrato->precio, 2) }}</dd>
                     <dt class="col-5">Periodicidad</dt>
                     <dd class="col-7">{{ \App\Models\ContratoPension::PERIODICIDAD_LABELS[$contrato->periodicidad] }}</dd>
-                    <dt class="col-5">Día de cobro</dt>
-                    <dd class="col-7">{{ $contrato->dia_cobro ? 'día ' . $contrato->dia_cobro : '—' }}</dd>
                     <dt class="col-5">Depósito</dt>
                     <dd class="col-7">${{ number_format((float) $contrato->deposito, 2) }}</dd>
                     <dt class="col-5">Inicio</dt>
                     <dd class="col-7">{{ $contrato->fecha_inicio->format('d/m/Y') }}</dd>
                     <dt class="col-5">Término</dt>
                     <dd class="col-7">{{ $contrato->fecha_fin?->format('d/m/Y') ?? 'sin fecha' }}</dd>
+                    <dt class="col-5">Entrada de la unidad</dt>
+                    <dd class="col-7">{{ $contrato->fecha_entrada?->format('d/m/Y H:i') ?? '—' }}</dd>
+                    <dt class="col-5">Empresa</dt>
+                    <dd class="col-7">{{ $contrato->nombre_empresa ?: '—' }}</dd>
+                    <dt class="col-5">Contacto empresa</dt>
+                    <dd class="col-7">{{ $contrato->contacto_empresa ?: '—' }}</dd>
+                    <dt class="col-5">Dirección</dt>
+                    <dd class="col-7">{{ $contrato->direccion_empresa ?: '—' }}</dd>
+                    <dt class="col-5">Documentación</dt>
+                    <dd class="col-7">
+                        @if ($contrato->documentacion_label)
+                            <span class="badge bg-secondary">{{ $contrato->documentacion_label }}</span>
+                        @else
+                            —
+                        @endif
+                    </dd>
                     <dt class="col-5">Observaciones</dt>
                     <dd class="col-7">{{ $contrato->observaciones ?: '—' }}</dd>
                 </dl>
@@ -284,4 +299,13 @@
         @endcan
     </div>
 </div>
+
+@if (session('ticket_nuevo'))
+    @push('scripts')
+        <script>
+            // Recién creado: abre el ticket térmico en una pestaña para imprimir.
+            window.open('{{ route('contratos.ticket', ['contrato' => $contrato, 'auto' => 1]) }}', '_blank');
+        </script>
+    @endpush
+@endif
 @endsection

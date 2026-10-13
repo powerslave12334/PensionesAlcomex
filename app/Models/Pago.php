@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 class Pago extends Model
 {
@@ -53,6 +54,36 @@ class Pago extends Model
     public function contrato(): BelongsTo
     {
         return $this->belongsTo(ContratoPension::class, 'contrato_pension_id');
+    }
+
+    /**
+     * Meses completos cubiertos por el periodo, con la convención del sistema:
+     * un periodo de N meses va de `inicio` a `inicio + N meses − 1 día`
+     * (01/10–31/10 = 1; 11/10/2026–10/04/2027 = 6).
+     */
+    public static function calcularMeses(Carbon $inicio, Carbon $fin): int
+    {
+        $meses = 0;
+
+        while ($inicio->copy()->addMonthsNoOverflow($meses + 1)->subDay()->lte($fin)) {
+            $meses++;
+
+            if ($meses >= 1200) {
+                break;
+            }
+        }
+
+        return max(1, $meses);
+    }
+
+    /** Meses que cobró este recibo (derivado del periodo). */
+    public function getMesesCobradosAttribute(): ?int
+    {
+        if (! $this->periodo_inicio || ! $this->periodo_fin) {
+            return null;
+        }
+
+        return self::calcularMeses($this->periodo_inicio, $this->periodo_fin);
     }
 
     public function cliente(): BelongsTo

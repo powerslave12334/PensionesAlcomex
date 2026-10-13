@@ -15,7 +15,6 @@ class ClienteController extends Controller
         $clientes = Cliente::query()
             ->buscar($request->string('q')->toString())
             ->when($request->has('activo'), fn ($q) => $q->where('activo', $request->boolean('activo')))
-            ->withCount('vehiculos')
             ->latest()
             ->paginate(10)
             ->withQueryString();
@@ -59,9 +58,9 @@ class ClienteController extends Controller
     {
         $this->authorize('clientes.eliminar');
 
-        if ($cliente->vehiculos()->exists()) {
+        if ($cliente->contratos()->exists()) {
             $cliente->update(['activo' => false]);
-            $mensaje = 'El cliente tiene vehículos asociados: se desactivó en lugar de eliminarlo.';
+            $mensaje = 'El cliente tiene contratos asociados: se desactivó en lugar de eliminarlo.';
         } else {
             $cliente->delete();
             $mensaje = 'Cliente eliminado.';

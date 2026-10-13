@@ -1,19 +1,6 @@
 @csrf
 
 <div class="row g-3">
-    <div class="col-md-6">
-        <label class="form-label">Propietario <span class="text-danger">*</span></label>
-        <select name="cliente_id" class="form-select @error('cliente_id') is-invalid @enderror" required>
-            <option value="">— Seleccione un cliente —</option>
-            @foreach ($clientes as $c)
-                <option value="{{ $c->id }}" @selected(old('cliente_id', $vehiculo->cliente_id ?? '') == $c->id)>
-                    {{ $c->nombre_completo }}
-                </option>
-            @endforeach
-        </select>
-        @error('cliente_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-
     <div class="col-md-3">
         <label class="form-label">Placas <span class="text-danger">*</span></label>
         <input name="placas" value="{{ old('placas', $vehiculo->placas ?? '') }}" maxlength="20"

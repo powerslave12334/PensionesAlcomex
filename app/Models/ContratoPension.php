@@ -50,6 +50,15 @@ class ContratoPension extends Model
     /** Días de aviso previos al vencimiento (US-0307). */
     public const DIAS_AVISO = 15;
 
+    /** Documentación entregada por el cliente (una sola opción). */
+    public const DOCUMENTACIONES = ['INE', 'TARJETA_CIRCULACION', 'LICENCIA_CONDUCIR'];
+
+    public const DOCUMENTACION_LABELS = [
+        'INE'                => 'INE',
+        'TARJETA_CIRCULACION' => 'Tarjeta de circulación',
+        'LICENCIA_CONDUCIR'  => 'Licencia de conducir',
+    ];
+
     /** Matriz de transiciones permitidas (US-0305). Vacío = estado final. */
     public const TRANSICIONES = [
         'PENDIENTE'  => ['ACTIVA', 'CANCELADA'],
@@ -64,12 +73,14 @@ class ContratoPension extends Model
 
     protected $fillable = [
         'cliente_id', 'vehiculo_id', 'tarifa_id', 'numero_contrato',
-        'fecha_inicio', 'fecha_fin', 'precio', 'periodicidad',
-        'dia_cobro', 'estado', 'deposito', 'observaciones',
+        'nombre_empresa', 'contacto_empresa', 'direccion_empresa',
+        'fecha_inicio', 'fecha_entrada', 'fecha_fin', 'precio', 'periodicidad',
+        'dia_cobro', 'estado', 'deposito', 'documentacion', 'observaciones',
     ];
 
     protected $casts = [
         'fecha_inicio' => 'date',
+        'fecha_entrada' => 'datetime',
         'fecha_fin'    => 'date',
         'precio'       => 'decimal:2',
         'deposito'     => 'decimal:2',
@@ -171,5 +182,24 @@ class ContratoPension extends Model
     public function getEstadoClaseAttribute(): string
     {
         return self::ESTADO_CLASSES[$this->estado] ?? 'bg-secondary';
+    }
+
+    public function getDocumentacionLabelAttribute(): ?string
+    {
+        return $this->documentacion
+            ? (self::DOCUMENTACION_LABELS[$this->documentacion] ?? $this->documentacion)
+            : null;
+    }
+
+    /** Al crear un nuevo contrato, si viene en PENDIENTE lo pasamos a ACTIVA. */
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if ($model->estado === 'PENDIENTE') {
+                $model->estado = 'ACTIVA';
+            }
+        });
     }
 }

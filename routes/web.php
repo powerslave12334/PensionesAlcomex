@@ -20,7 +20,12 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/', function () {
-    return redirect()->route(Auth::check() ? 'home' : 'login');
+    if (! Auth::check()) {
+        return redirect()->route('login');
+    }
+
+    // El cajero aterriza en «Buscar ticket»; el resto, en el dashboard.
+    return redirect(Auth::user()->hasRole('CAJERO') ? route('pagos.tickets') : route('home'));
 });
 
 Auth::routes(['register' => false]);
@@ -30,6 +35,8 @@ Route::middleware(['auth'])->group(function () {
 
     // Sprint 1
     Route::resource('clientes', ClienteController::class)->except(['show']);
+    // Autocompletado por placas del formulario de pensiones (antes del resource)
+    Route::get('vehiculos/buscar', [VehiculoController::class, 'buscar'])->name('vehiculos.buscar');
     Route::resource('vehiculos', VehiculoController::class)->except(['show']);
 
     // Sprint 2 — Módulo 4
@@ -45,6 +52,8 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('tarifas', TarifaController::class)->except(['show']);
 
     Route::resource('contratos', ContratoPensionController::class); // sí incluye show
+    Route::get('contratos/{contrato}/ticket', [ContratoPensionController::class, 'ticket'])
+        ->name('contratos.ticket');
     Route::post('contratos/{contrato}/estado', [ContratoPensionController::class, 'cambiarEstado'])
         ->name('contratos.estado');
     Route::post('contratos/{contrato}/renovar', [ContratoPensionController::class, 'renovar'])
@@ -58,6 +67,11 @@ Route::middleware(['auth'])->group(function () {
     // ¡Ojo! `pagos/corte` va ANTES del resource: si no, la ruta pagos/{pago}
     // se come «corte» como si fuera un folio.
     Route::get('pagos/corte', [PagoController::class, 'corte'])->name('pagos.corte');
+    // Buscador de ticket a cobrar (folio o placa). Estáticas van ANTES del resource.
+    Route::get('pagos/tickets', [PagoController::class, 'tickets'])->name('pagos.tickets');
+    // Formulario de cobro en modal: carga el _form ya llenado para un contrato.
+    Route::get('pagos/create/modal', [PagoController::class, 'createModal'])
+        ->name('pagos.create.modal');
     Route::resource('pagos', PagoController::class)->only(['index', 'create', 'store', 'show']);
     Route::post('pagos/{pago}/estado', [PagoController::class, 'estado'])->name('pagos.estado');
 

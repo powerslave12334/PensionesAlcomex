@@ -16,6 +16,10 @@
         <form action="{{ route('pagos.store') }}" method="POST" novalidate>
             @csrf
             @include('pagos._form')
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-success">Guardar cobro</button>
+                <a href="{{ route('pagos.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
         </form>
     </div>
 </div>

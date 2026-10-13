@@ -2309,6 +2309,13 @@ php artisan serve --port=8000
 
 Total: **32 permisos** (21 previos + `tarifas` ×4 + `contratos` ×7).
 
+> **Ajuste posterior (10/10/2026):** `CAJERO` ahora tiene también
+> **`contratos.crear` + `contratos.editar` + `contratos.cambiar_estado`**
+> (el cajero da de alta, corrige y activa/suspende pensiones). La tabla
+> anterior refleja el estado al ejecutar este sprint; el total global de
+> permisos **no cambia** (solo el reparto: CAJERO 7 → 10). Registrado en
+> «Desviaciones» del Apéndice D.
+
 ---
 
 ## Apéndice A — Estados y transiciones
@@ -2388,16 +2395,93 @@ php -l  (todos los PHP nuevos: sin errores)
 ### Desviaciones respecto a la guía
 
 - Se agregó la sección **§7.3** con la matriz real de permisos por rol.
+- **Ajuste posterior (10/10/2026):** se quitó el select **«Periodicidad»**
+  del formulario de alta/edición de contrato (`contratos/_form.blade.php`) y
+  su regla de validación en `ContratoPensionRequest`; el campo se fija solo
+  con el **`->default('MENSUAL')`** de la columna (el controlador ya no lo
+  envía). La lectura en el expediente y el formulario de **renovación**
+  (US-0305, `contratos.renovar`) no se tocaron. Verificado: el alta
+  `PEN-2026-0002` sin enviar `periodicidad` → guardada como `Mensual`;
+  `GET /contratos/6/edit` sin `select[name="periodicidad"]` ni su etiqueta;
+  `PUT` sin el campo → 200 y `Periodicidad: Mensual` intacta.
+- **Ajuste posterior (10/10/2026):** se añadieron `contratos.crear`,
+  `contratos.editar` y `contratos.cambiar_estado` al rol `CAJERO` (pedido del
+  equipo antes del Sprint 6). Verificado con `cajero@pension.mx`:
+  `/contratos` y `/contratos/create` → 200 con «+ Nuevo contrato», alta real
+  `PEN-2026-0001` → 302, `/contratos/5/edit` → 200,
+  `POST /contratos/5/estado {estado:'ACTIVA'}` → 200 (badge «Activa» en
+  expediente e índice) y estado inválido → 422 con el mensaje de la matriz
+  `TRANSICIONES`. Se quedó **sin** `contratos.asignar` / `renovar` /
+  `eliminar` / `tarifas.ver`: `POST /contratos/5/espacio` y `/tarifas` → 403.
+  Regresión: `supervisor@pension.mx` sigue en **403** en `/contratos/create`,
+  `/contratos/5/edit` y `POST /contratos/5/estado`.
 - **Bug corregido durante la verificación:** `asignacionVigiente` (`belongsTo` → `hasOne`)
   en `ContratoPension` y `Espacio` (Apéndice B.1).
 - El caso «vehículo pertenece a otro cliente» no pudo probarse en UI: el entorno solo
   tiene 1 cliente / 1 vehículo; la regla vive en `ContratoPensionRequest`.
+  **(Superado el 12/10/2026:** la regla pasó a `resolverVehiculo()` en el
+  controlador y el caso sí se probó — ver el rediseño de más abajo.**)**
+- **Rediseño del alta de pensiones (12/10/2026, pedido del equipo):**
+  1. **Cliente** → textbox con buscador AJAX (`GET /clientes/buscar`,
+     `ClienteController@buscar`, autoriza `clientes.ver` **o** `contratos.crear`
+     para que el CAJERO pueda buscar) + **alta rápida** visible cuando no hay
+     coincidencias (Nombre/Apellido(s)/Teléfono; se crea en `contratos.store`,
+     sin requerir `clientes.crear`).
+  2. **Nuevas columnas en `contratos_pension`** (migración aditiva
+     `2026_10_10_100000_add_datos_nueva_pension...`): `nombre_empresa`,
+     `contacto_empresa`, `direccion_empresa`, `fecha_entrada` (datetime) y
+     `documentacion` enum(`INE`,`TARJETA_CIRCULACION`,`LICENCIA_CONDUCIR`).
+     Filas viejas quedan en NULL y el expediente muestra «—».
+  3. **Vehículo en línea** → se quitó el select `vehiculo_id`; ahora captura
+     tipo de unidad/placas/marca/modelo/color y `resolverVehiculo()` crea o
+     **reutiliza por placas** (actualiza datos si el vehículo es del mismo
+     cliente; error 422 si es de otro). Se eliminó la regla «vehículo
+     pertenece al cliente» y `vehiculos`/`clientes` de `combos()` (ahora solo
+     `tiposVehiculo`, `tarifas`, `espacios`).
+  4. **Documentación** → pidió checkbox pero «solo una de las tres opciones»:
+     se implementó como **radio group** (control correcto para exclusión
+     mutua), `required`.
+  5. **Fecha y hora de entrada** → `datetime-local` con `now()` editable;
+     el servidor guarda `now()` si viene vacío.
+  - Verificado con CAJERO (12/10): alta `PEN-2026-0003` con cliente nuevo
+    «Maria Lopez» (alta rápida, split nombre/apellidos), vehículo nuevo
+    `XYZ9876` y doc `INE` → +1 cliente, +1 vehículo; placas de **otro cliente**
+    → 422 «ya están registradas a nombre de «Maria Lopez»»; reutilización con
+    el dueño correcto → `PEN-2026-0004` **sin duplicar** vehículo (attrs
+    actualizados); edición de `PEN-2026-0003` (empresa/color/doc) → OK;
+    validación vacía → 12 mensajes en español; regresión de pagos →
+    `REC-2026-0003` 1 mes × $1,500.00. Bug propio corregido en la pasada:
+    `authorizeAny()` no existe en el trait → `abort_unless(...->can() ...)`.
+  - ⚠️ Evitar `@php($var = …)` inline en vistas: con Livewire se compila mal.
+- **Autocompletado por placas (12/10/2026):** nuevo endpoint
+  `GET /vehiculos/buscar?placas=` (`VehiculoController@buscar`; autoriza
+  `vehiculos.ver` **o** `contratos.crear`, igual que `clientes/buscar`;
+  devuelve `{vehiculo: {...}|null}` con tipo/marca/modelo/color y el dueño).
+  En `contratos/_form.blade.php` las placas buscan con *debounce* de 300 ms y:
+  rellenan tipo/marca/modelo/color; muestran un aviso bajo el campo (verde si
+  el dueño coincide con el cliente elegido, amarillo si no coincide, azul si
+  aún no se elige cliente); si las placas cambian a unas **inexistentes** se
+  limpia el autocompletado (salvo que el usuario haya editado un campo a
+  mano); y se ejecuta al cargar la edición. El guardado sigue igual:
+  `resolverVehiculo()` reutiliza o crea por placas. Verificado (12/10):
+  `ABC1234` → Nissan Versa «Juan Perez Lopez» (aviso azul), elegir a Maria
+  → aviso amarillo de dueño distinto, `XYZ9876` → Toyota Corolla Azul con
+  aviso verde, `NEW1234` → sin coincidencia y campos limpios, marca escrita
+  a mano se conserva, alta completa `PEN-2026-0005` (id 9) reutiliza el
+  vehículo id 4 (**vehiculos = 2**), `/contratos/7/edit` precarga con aviso
+  verde, consola sin errores y `laravel.log` limpio. Ruta total: **94**.
 
 ### Estado de los datos al terminar
 
 - 10 tarifas activas, 32 permisos, 2 contratos: `PEN-2026-0001` (`CANCELADA`) y
   `PEN-2026-0002` (`ACTIVA`, cajón A-01 `OCUPADO`).
 - Cajones: A-01 zona A `OCUPADO`, A-02 zona A `DISPONIBLE`, A-01 zona B `DISPONIBLE`.
+- **12/10/2026 (rediseño):** 5 permisos más (CAJERO con contratos, total 40);
+  clientes = 2 («Juan Perez Lopez», «Maria Lopez»), vehículos = 2
+  (`ABC1234`, `XYZ9876`), contratos = 5 (`PEN-2026-0001/0002` previos +
+  `PEN-2026-0003`, `PEN-2026-0004` y `PEN-2026-0005` del nuevo formulario,
+  los tres con datos de empresa, `fecha_entrada` y `documentacion`), pagos = 3
+  (`REC-2026-0003` 1 mes × $1,500.00 del contrato 7).
 
 ### Estado final
 

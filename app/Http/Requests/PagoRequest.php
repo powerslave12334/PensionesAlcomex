@@ -31,26 +31,15 @@ class PagoRequest extends FormRequest
             'metodo_pago_id' => [
                 'required', 'integer',
                 Rule::exists('metodos_pago', 'id')->where('activo', true),
-                // US-0402: la referencia es obligatoria si el método lo pide.
-                // Ojo: la regla vive aquí (y no en `referencia`) porque Laravel
-                // omite las validaciones de un atributo vacío (null) salvo que
-                // sean implícitas; `referencia` vacía no dispararía el closure.
-                function (string $attribute, mixed $value, Closure $fail): void {
-                    $metodo = MetodoPago::find($value);
-                    $valor  = trim((string) $this->input('referencia'));
-                    if ($metodo?->requiere_referencia && $valor === '') {
-                        $fail("El método «{$metodo->nombre}» requiere número de referencia o autorización.");
-                    }
-                },
             ],
             'fecha_pago'     => ['required', 'date'],
+            // El periodo lo define el servidor: desde el inicio de la pensión
+            // hasta el día del pago (ya no se captura «periodo hasta»).
             'periodo_inicio' => ['required', 'date'],
-            'periodo_fin'    => ['required', 'date', 'after_or_equal:periodo_inicio'],
             'subtotal'       => ['required', 'numeric', 'min:0.01'],
             'descuento'      => ['nullable', 'numeric', 'min:0', 'lte:subtotal'],
             'impuesto'       => ['nullable', 'numeric', 'min:0'],
             'total'          => ['required', 'numeric', 'min:0'],
-            // US-0402: la referencia es obligatoria si el método lo pide
             'referencia'     => ['nullable', 'string', 'max:100'],
             'estado'        => ['required', 'in:PENDIENTE,PAGADO'],
             'observaciones' => ['nullable', 'string', 'max:1000'],
@@ -67,8 +56,6 @@ class PagoRequest extends FormRequest
             'fecha_pago.required'          => 'Indica la fecha del pago.',
             'fecha_pago.date'              => 'La fecha del pago no es válida.',
             'periodo_inicio.required'      => 'Indica el inicio del periodo que cubre el pago.',
-            'periodo_fin.required'         => 'Indica el fin del periodo que cubre el pago.',
-            'periodo_fin.after_or_equal'   => 'El fin del periodo debe ser igual o posterior al inicio.',
             'subtotal.required'            => 'El subtotal no puede estar vacío.',
             'subtotal.numeric'             => 'El subtotal debe ser un importe numérico.',
             'subtotal.min'                 => 'El subtotal debe ser mayor que cero.',
